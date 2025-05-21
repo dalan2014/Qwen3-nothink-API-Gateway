@@ -111,7 +111,12 @@ async def _handle_backend_response(
     is_streaming_request: bool,
 ) -> StreamingResponse:
     """Proxy vLLM responses and normalise reasoning fields."""
-
+    excluded = {
+        "content-length",
+        "transfer-encoding",
+        "connection",
+        "content-encoding",   # 追加这一行
+    }
     # ------------------------------------------------------- STREAMING branch
     if is_streaming_request:
         if response.status_code != 200:
@@ -131,7 +136,7 @@ async def _handle_backend_response(
             finally:
                 await response.aclose()
 
-        safe_headers = {k: v for k, v in response.headers.items() if k.lower() not in {"content-length", "transfer-encoding", "connection"}}
+        safe_headers = {k: v for k, v in response.headers.items() if k.lower() not in excluded}
         return StreamingResponse(
             patched_stream(),
             media_type=response.headers.get("content-type", "text/event-stream"),
@@ -143,7 +148,7 @@ async def _handle_backend_response(
     response_content = await response.aread()
     await response.aclose()
 
-    safe_headers = {k: v for k, v in response.headers.items() if k.lower() not in {"content-length", "transfer-encoding", "connection"}}
+    safe_headers = {k: v for k, v in response.headers.items() if k.lower() not in excluded}
 
     if response.status_code >= 400:
         logger.error("Backend error %s: %s", response.status_code, response_content.decode(errors="ignore"))
